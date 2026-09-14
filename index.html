@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020617" />
+    <title>PROJECT J.A.R.V.I.S.</title>
+    <meta name="description" content="Just A Rather Very Intelligent System. A multimodal AI assistant featuring real-time voice interaction, Google authentication, and system control capabilities." />
+    <meta property="og:title" content="PROJECT J.A.R.V.I.S." />
+    <meta property="og:description" content="Just A Rather Very Intelligent System. A multimodal AI assistant featuring real-time voice interaction, Google authentication, and system control capabilities." />
+    <link rel="manifest" href="/manifest.json" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+      
+      body {
+        font-family: 'Rajdhani', sans-serif;
+        background-color: #020617; /* slate-950 */
+        color: #a5f3fc; /* cyan-200 */
+        overflow: hidden;
+      }
+      
+      .font-mono {
+        font-family: 'Share Tech Mono', monospace;
+      }
+
+      /* CRT Scanline effect */
+      .scanline {
+        width: 100%;
+        height: 100px;
+        z-index: 10;
+        background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(6, 182, 212, 0.1) 50%, rgba(0,0,0,0) 100%);
+        opacity: 0.1;
+        position: absolute;
+        bottom: 100%;
+        animation: scanline 10s linear infinite;
+        pointer-events: none;
+      }
+
+      @keyframes scanline {
+        0% { bottom: 100%; }
+        100% { bottom: -100px; }
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0f172a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #0891b2;
+        border-radius: 3px;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "chess.js": "https://esm.sh/chess.js@1.0.0-beta.8"
+  }
+}
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <div class="scanline"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

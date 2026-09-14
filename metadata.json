@@ -1,0 +1,12 @@
+{
+  "name": "PROJECT J.A.R.V.I.S.",
+  "description": "Just A Rather Very Intelligent System. A multimodal AI assistant featuring real-time voice interaction, Google authentication, and system control capabilities.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
