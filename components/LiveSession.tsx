@@ -910,7 +910,14 @@ const LiveSession: React.FC<LiveSessionProps> = ({
   }, [disconnectSession]);
 
   return (
-    <div className="flex flex-col items-center justify-center w-full h-full relative overflow-hidden bg-slate-950">
+    <div className="flex flex-col items-center justify-center w-full h-full relative overflow-hidden bg-slate-950/60">
+      {/* Sci-Fi Wallpaper Ambient Layer for Voice Mode */}
+      {!isCameraActive && (
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none opacity-25 scale-105 transition-opacity duration-1000 z-0"
+          style={{ backgroundImage: `url('/jarvis-wallpaper.jpg')` }}
+        />
+      )}
       
       {/* Video Background Layer - Project Astra Mode */}
       <div className={`absolute inset-0 z-0 transition-opacity duration-1000 ${isCameraActive ? 'opacity-100' : 'opacity-0'}`}>

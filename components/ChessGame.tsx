@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Chess } from 'chess.js';
 import type { Move, Square, Piece } from 'chess.js';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { Modality } from "@google/genai";
 import { playAudioData } from '../utils/audio';
+import { executeTieredGeminiRequest, TTS_MODEL_TIERS } from '../utils/geminiClient';
 import { SavedGame } from '../types';
 
 interface ChessGameProps {
@@ -37,16 +38,15 @@ const ChessGame: React.FC<ChessGameProps> = ({ onLog }) => {
   // --- AUDIO HELPER ---
   const speak = async (text: string) => {
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
+        const failoverResult = await executeTieredGeminiRequest({
             contents: [{ parts: [{ text }] }],
             config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } } },
             },
+            prioritizedTiers: TTS_MODEL_TIERS,
         });
-        const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        const base64 = failoverResult.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         if (base64) await playAudioData(base64);
     } catch(e) {}
   };
@@ -75,19 +75,19 @@ const ChessGame: React.FC<ChessGameProps> = ({ onLog }) => {
     };
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+        // Attempts primary higher tier first, cycling through alternatives and safeguarding with Gemini 1.5 Flash
+        const failoverResult = await executeTieredGeminiRequest({
             contents: `Play chess as Black. FEN: ${currentFen}.
             Valid moves: ${tempGame.moves().join(', ')}.
             Reply ONLY with the move in SAN format (e.g. Nf6, exd5). Do not explain.`,
+            onLog: (msg) => onLog(`[Chess Core] ${msg}`)
         });
 
-        let moveSan = response.text?.trim() || "";
+        let moveSan = failoverResult.text?.trim() || "";
         // Clean up response (remove punctuation, quotes)
         moveSan = moveSan.replace(/['".]/g, '');
 
-        onLog(`J.A.R.V.I.S. thinking... Protocol: ${moveSan}`);
+        onLog(`J.A.R.V.I.S. thinking via ${failoverResult.modelUsed}... Protocol: ${moveSan}`);
 
         if (moveSan) {
             const newGame = new Chess(currentFen);

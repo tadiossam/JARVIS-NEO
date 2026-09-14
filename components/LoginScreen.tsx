@@ -242,10 +242,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen w-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden font-mono text-cyan-500 selection:bg-cyan-500 selection:text-slate-900">
-      {/* Background Matrix / Cyber Effect */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black pointer-events-none" />
+      {/* Sci-Fi Wallpaper of Hologram AI (User Provided) */}
       <div 
-        className="absolute inset-0 opacity-15 pointer-events-none" 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat pointer-events-none opacity-45 scale-105 transition-transform duration-1000 z-0"
+        style={{ 
+          backgroundImage: `url('/jarvis-wallpaper.jpg')`,
+        }}
+      />
+      
+      {/* Radial Vignette & Atmospheric Gradients to keep login box high contrast & legible */}
+      <div className="absolute inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_center,_rgba(2,6,23,0.35)_0%,_rgba(2,6,23,0.85)_65%,_rgba(2,6,23,0.98)_100%)]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-transparent to-slate-950/90 pointer-events-none z-0" />
+      
+      {/* Background Matrix / Cyber Grid Effect */}
+      <div 
+        className="absolute inset-0 opacity-15 pointer-events-none z-0" 
         style={{ 
           backgroundImage: 'linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px)', 
           backgroundSize: '40px 40px' 

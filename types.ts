@@ -17,6 +17,8 @@ export interface ChatMessage {
   fileName?: string;
   groundingMetadata?: any; 
   citations?: { id: string; source: string; text: string }[];
+  modelUsed?: string;
+  isFallback?: boolean;
 }
 
 export interface User {

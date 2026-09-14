@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
 import { ProjectFile, FileSystemActions, AppMode } from '../types';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { Modality } from "@google/genai";
 import { playAudioData } from '../utils/audio';
+import { executeTieredGeminiRequest, TTS_MODEL_TIERS } from '../utils/geminiClient';
 import Hologram from './Hologram';
 
 interface NotebookViewProps {
@@ -59,11 +60,9 @@ const NotebookView: React.FC<NotebookViewProps> = ({ files, actions, onNavigate,
     onLog("Synthesizing multi-source intelligence...");
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = getActiveContext();
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+      const failoverResult = await executeTieredGeminiRequest({
         contents: `Analyze the following document corpus and generate a structured JSON briefing.
         
         CORPUS:
@@ -79,12 +78,13 @@ const NotebookView: React.FC<NotebookViewProps> = ({ files, actions, onNavigate,
         Return ONLY valid JSON.`,
         config: {
             responseMimeType: "application/json"
-        }
+        },
+        onLog: (msg) => onLog(`[Briefing Synthesis] ${msg}`)
       });
 
-      const data = JSON.parse(response.text || '{}');
+      const data = JSON.parse(failoverResult.text || '{}');
       setBriefing(data);
-      onLog("Neural Briefing finalized.");
+      onLog(`Neural Briefing finalized using ${failoverResult.modelUsed}.`);
     } catch (e: any) {
       onLog(`Synthesis Error: ${e.message}`);
     } finally {
@@ -98,27 +98,25 @@ const NotebookView: React.FC<NotebookViewProps> = ({ files, actions, onNavigate,
     onLog("Generating deep-dive audio script...");
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = getActiveContext();
       
-      // We use Pro for the script to ensure the conversation is actually intelligent
-      const scriptResponse = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+      // We use our primary higher-tier model first with failover fallback
+      const scriptResponse = await executeTieredGeminiRequest({
         contents: `Create a professional podcast-style deep dive conversation between 'Kore' (Host) and 'Puck' (Researcher) discussing this corpus. 
         Kore should be curious and facilitate the flow. Puck should explain the core technical or conceptual breakthroughs.
         Format: "Kore: [speech]" and "Puck: [speech]".
         
         CORPUS:
-        ${context}`
+        ${context}`,
+        onLog: (msg) => onLog(`[DeepDive Script] ${msg}`)
       });
       
       const script = scriptResponse.text;
       if (!script) throw new Error("Script generation failed.");
 
-      onLog("Encoding audio packets...");
+      onLog(`Encoding audio packets (Script built via ${scriptResponse.modelUsed})...`);
 
-      const audioResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
+      const audioResponse = await executeTieredGeminiRequest({
         contents: [{ parts: [{ text: `TTS this transcript with realistic pacing:\n${script}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -130,10 +128,12 @@ const NotebookView: React.FC<NotebookViewProps> = ({ files, actions, onNavigate,
               ]
             }
           }
-        }
+        },
+        prioritizedTiers: TTS_MODEL_TIERS,
+        onLog: (msg) => onLog(`[DeepDive Audio] ${msg}`)
       });
 
-      const base64Audio = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const base64Audio = audioResponse.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         onLog("Deep Dive transmission active.");
         await playAudioData(base64Audio);

@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppMode, IntegrationConfig, Alert, SmartDevice, SmartHomeActions } from '../types';
-import { GoogleGenAI, Modality } from "@google/genai";
+import { Modality } from "@google/genai";
 import { playAudioData } from '../utils/audio';
+import { executeTieredGeminiRequest, TTS_MODEL_TIERS } from '../utils/geminiClient';
 import Hologram from './Hologram';
 import SmartHomeWidget from './SmartHomeWidget';
 
@@ -83,9 +84,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     const summaryText = `Attention. Backend report received. ${targetAlerts.length} active alerts. ${criticalCount > 0 ? 'Critical status confirmed.' : ''} Latest update: ${topMsg}`;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
+      const failoverResult = await executeTieredGeminiRequest({
         contents: [{ parts: [{ text: summaryText }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -95,8 +94,10 @@ const Dashboard: React.FC<DashboardProps> = ({
               },
           },
         },
+        prioritizedTiers: TTS_MODEL_TIERS,
+        onLog: (msg) => onLog(`[Vocalizer] ${msg}`)
       });
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const base64Audio = failoverResult.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         await playAudioData(base64Audio);
       }
@@ -194,14 +195,49 @@ const Dashboard: React.FC<DashboardProps> = ({
                <SmartHomeWidget devices={smartDevices} actions={smartHomeActions} onCameraClick={handleCameraClick} />
             </div>
 
-            {/* Status & Clock */}
-            <div className="md:col-span-1 bg-slate-900/40 border border-cyan-900/30 rounded-lg p-4 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[150px]">
-              <div className="absolute inset-0 opacity-20 pointer-events-none scale-75 blur-sm group-hover:blur-0 transition-all">
-                <Hologram size="lg" />
+            {/* Status, Clock & Hologram AI Core */}
+            <div className="md:col-span-1 bg-slate-900/60 border border-cyan-800/50 rounded-lg p-4 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[180px] shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+              {/* Subtle ambient wallpaper in card background */}
+              <div 
+                className="absolute inset-0 bg-cover bg-center opacity-15 pointer-events-none group-hover:opacity-25 transition-opacity"
+                style={{ backgroundImage: `url('/jarvis-wallpaper.jpg')` }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/80 to-transparent pointer-events-none" />
+
+              {/* Holographic AI Avatar Portrait */}
+              <div className="relative z-10 mb-2">
+                <div className="w-16 h-16 rounded-full p-0.5 border-2 border-cyan-400/80 shadow-[0_0_15px_rgba(6,182,212,0.5)] relative overflow-hidden group-hover:scale-105 transition-transform">
+                  <img 
+                    src="/jarvis-wallpaper.jpg" 
+                    alt="J.A.R.V.I.S. Core" 
+                    className="w-full h-full object-cover rounded-full"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-cyan-500/10 pointer-events-none" />
+                </div>
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-950 flex items-center justify-center shadow">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
+                </span>
               </div>
-              <div className="text-4xl font-bold text-cyan-300 z-10">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-              <div className="flex gap-2 w-full px-4 z-10 mt-4">
-                <button onClick={() => onNavigate(AppMode.LIVE)} className="flex-1 py-2 bg-cyan-900/20 border border-cyan-600/50 text-cyan-400 text-xs rounded hover:bg-cyan-500 hover:text-slate-900">VOICE LINK</button>
+
+              <div className="text-3xl font-bold text-cyan-200 z-10 tracking-wider">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </div>
+              <div className="text-[10px] text-cyan-500 font-mono tracking-widest uppercase mt-0.5 z-10 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                J.A.R.V.I.S. NEURAL CORE ONLINE
+              </div>
+
+              <div className="flex gap-2 w-full px-2 z-10 mt-3">
+                <button 
+                  onClick={() => onNavigate(AppMode.LIVE)} 
+                  className="flex-1 py-1.5 bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold rounded hover:bg-cyan-400 hover:text-slate-950 transition-all flex items-center justify-center gap-1.5 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
+                  </svg>
+                  VOICE LINK
+                </button>
               </div>
             </div>
 

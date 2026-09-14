@@ -183,6 +183,18 @@ function App() {
   }, [user, mode]);
 
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [wallpaperOpacity, setWallpaperOpacity] = useState<number>(() => {
+    const saved = localStorage.getItem('jarvis_wallpaper_opacity');
+    return saved ? parseFloat(saved) : 0.35;
+  });
+
+  const cycleWallpaperOpacity = () => {
+    const levels = [0.2, 0.35, 0.55, 0.75, 0.1];
+    const currentIndex = levels.findIndex(l => Math.abs(l - wallpaperOpacity) < 0.05);
+    const nextLevel = levels[(currentIndex + 1) % levels.length];
+    setWallpaperOpacity(nextLevel);
+    localStorage.setItem('jarvis_wallpaper_opacity', nextLevel.toString());
+  };
 
   const handleLogin = (u: User) => {
     setUser(u);
@@ -223,6 +235,25 @@ function App() {
 
   return (
     <div className="relative min-h-screen bg-slate-950 text-cyan-400 font-sans selection:bg-cyan-500 selection:text-slate-900 overflow-hidden flex flex-col">
+      {/* Universal Hologram AI Wallpaper (Applies to Every Landing Page & View) */}
+      <div 
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat pointer-events-none z-0 transition-opacity duration-700"
+        style={{ 
+          backgroundImage: `url('/jarvis-wallpaper.jpg')`,
+          opacity: wallpaperOpacity,
+        }}
+      />
+      {/* Sci-Fi Atmospheric Vignette & Contrast Control */}
+      <div className="fixed inset-0 bg-slate-950/70 pointer-events-none z-0" />
+      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_center,_rgba(6,182,212,0.12)_0%,_rgba(2,6,23,0.85)_75%)]" />
+      <div 
+        className="fixed inset-0 opacity-10 pointer-events-none z-0" 
+        style={{ 
+          backgroundImage: 'linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px)', 
+          backgroundSize: '40px 40px' 
+        }}
+      />
+
       <Projector windows={projectorWindows} onClose={closeProjector} />
 
       <div className="relative z-10 container mx-auto h-screen p-2 md:p-4 flex flex-col gap-4">
@@ -248,7 +279,21 @@ function App() {
               ))}
             </div>
 
-            <div className="flex items-center gap-3 ml-2 border-l border-cyan-900/50 pl-4 relative">
+            <div className="flex items-center gap-2 ml-2 border-l border-cyan-900/50 pl-3 relative">
+              {/* Wallpaper Ambience Adjuster */}
+              <button
+                onClick={cycleWallpaperOpacity}
+                className="flex items-center gap-1 p-2 rounded text-cyan-800 hover:text-cyan-400 transition-all group"
+                title={`Wallpaper Ambience: ${Math.round(wallpaperOpacity * 100)}% (Click to toggle intensity)`}
+              >
+                <svg className="w-4 h-4 text-cyan-600 group-hover:text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[10px] font-mono text-cyan-700 group-hover:text-cyan-400 hidden sm:inline">
+                  {Math.round(wallpaperOpacity * 100)}%
+                </span>
+              </button>
+
               <button 
                 onClick={() => setShowSidebar(!showSidebar)} 
                 className={`p-2 rounded transition-all group ${showSidebar ? 'text-cyan-400 bg-cyan-900/20' : 'text-cyan-800 hover:text-cyan-600'}`}

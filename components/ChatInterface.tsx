@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type, FunctionDeclaration, Content, Part, Modality } from "@google/genai";
 import { ChatMessage, MessageRole, ProjectorType, IntegrationConfig, WorkspaceActions, SmartHomeActions, KnowledgeSource, FileSystemActions, ProjectFile } from '../types';
 import { playAudioData } from '../utils/audio';
+import { executeTieredGeminiRequest, DEFAULT_MODEL_TIERS, TTS_MODEL_TIERS, getFailoverTelemetry } from '../utils/geminiClient';
 import Hologram from './Hologram';
 
 interface ChatInterfaceProps {
@@ -154,9 +155,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (!text || isSpeaking) return;
     setIsSpeaking(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
+      const failoverResult = await executeTieredGeminiRequest({
         contents: [{ parts: [{ text }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -166,8 +165,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               },
           },
         },
+        prioritizedTiers: TTS_MODEL_TIERS,
+        onLog: (msg) => onLog(`[TTS Audio] ${msg}`)
       });
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      const base64Audio = failoverResult.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         await playAudioData(base64Audio);
       }
@@ -215,8 +216,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsLoading(true);
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
         const internalContext = files
             .filter(f => f.type === 'source' || f.tags.includes('notebook'))
             .map(f => `FILE: ${f.name}\nCONTENT: ${f.content}`)
@@ -237,16 +236,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             ]
         }));
 
-        const result = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+        // Handles API requests that attempt to use our primary higher-tier model first,
+        // cycling through prioritized alternative tiers upon rate limits/errors,
+        // and falling back to Gemini 1.5 Flash as a final safeguard to guarantee uninterrupted service.
+        const failoverResult = await executeTieredGeminiRequest({
             contents: history,
             config: { 
                 systemInstruction, 
                 tools: [{ functionDeclarations: [...fileSystemTools, ...projectorTools] }, { googleSearch: {} }] 
+            },
+            onLog: (msg) => onLog(`[Neural Engine] ${msg}`),
+            onTierChange: (fromModel, toModel, reason, tierIdx) => {
+                onLog(`[RECOVERY] Failover from ${fromModel} to Tier ${tierIdx + 1} (${toModel}) triggered by: ${reason}`);
             }
         });
 
-        const textResponse = result.text;
+        const result = failoverResult.response;
+        const textResponse = failoverResult.text;
         const grounding = result.candidates?.[0]?.groundingMetadata;
 
         if (textResponse) {
@@ -255,7 +261,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                  role: MessageRole.MODEL, 
                  text: textResponse, 
                  timestamp: new Date(), 
-                 groundingMetadata: grounding 
+                 groundingMetadata: grounding,
+                 modelUsed: failoverResult.modelUsed,
+                 isFallback: failoverResult.isFallback
              }]);
              if (autoVoice) speakText(textResponse);
         }
@@ -298,6 +306,32 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <p className="text-cyan-600 text-sm font-mono mt-2 animate-bounce">RELEASE TO INJECT DATA PACKET</p>
           </div>
         )}
+
+        {/* Model Tier & Failover Safeguard Status Bar */}
+        <div className="px-4 py-1.5 bg-slate-900/80 border-b border-cyan-900/40 flex items-center justify-between text-[11px] font-mono shrink-0">
+          <div className="flex items-center gap-2 text-cyan-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+            </span>
+            <span className="text-cyan-300 font-bold">PRIMARY TIER:</span>
+            <span className="text-cyan-200 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/50">
+              gemini-3.1-pro-preview
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 text-cyan-500">
+              <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>SAFEGUARD:</span>
+              <span className="text-emerald-400 font-bold">gemini-1.5-flash armed</span>
+            </div>
+            <span className="text-[10px] text-cyan-600 border-l border-cyan-900/50 pl-2">
+              5 TIERS ACTIVE
+            </span>
+          </div>
+        </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-cyan-900/50">
             {messages.length === 0 && !selectedFile && (
@@ -354,7 +388,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                             </button>
                         )}
 
-                        <div className="text-[10px] opacity-30 text-right mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                        <div className="flex items-center justify-between text-[10px] mt-2 pt-1 border-t border-cyan-900/20">
+                            {msg.role === MessageRole.MODEL ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono border ${
+                                  msg.isFallback 
+                                    ? 'bg-amber-950/60 border-amber-600/60 text-amber-300' 
+                                    : 'bg-cyan-950/50 border-cyan-800/40 text-cyan-400'
+                                }`}>
+                                  {msg.isFallback ? '⚡ FAILOVER: ' : 'CORE: '}
+                                  {msg.modelUsed || 'gemini-3.1-pro-preview'}
+                                </span>
+                              </div>
+                            ) : <span />}
+                            <span className="opacity-40">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+                        </div>
                     </div>
                 </div>
             ))}
