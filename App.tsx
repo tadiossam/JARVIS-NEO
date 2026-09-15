@@ -10,6 +10,7 @@ import ChessGame from './components/ChessGame';
 import LoginScreen from './components/LoginScreen';
 import FileManager from './components/FileManager';
 import NotebookView from './components/NotebookView';
+import JarvisVisualPersona from './components/JarvisVisualPersona';
 import { AppMode, SystemStat, ProjectorData, ProjectorType, IntegrationConfig, Alert, Email, CalendarEvent, WorkspaceActions, User, SmartDevice, SmartHomeActions, KnowledgeSource, ProjectFile, FileSystemActions } from './types';
 import { signOutGoogle } from './utils/googleAuth';
 
@@ -218,6 +219,8 @@ function App() {
   };
 
   const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [isAppSpeaking, setIsAppSpeaking] = useState(false);
+  const [isAppGenerating, setIsAppGenerating] = useState(false);
   const [systemStats, setSystemStats] = useState<SystemStat[]>([
     { label: 'CORES', value: navigator.hardwareConcurrency || 4, unit: 'THR', status: 'normal' },
     { label: 'BATTERY', value: '--', unit: '%', status: 'normal' },
@@ -235,23 +238,12 @@ function App() {
 
   return (
     <div className="relative min-h-screen bg-slate-950 text-cyan-400 font-sans selection:bg-cyan-500 selection:text-slate-900 overflow-hidden flex flex-col">
-      {/* Universal Hologram AI Wallpaper (Applies to Every Landing Page & View) */}
-      <div 
-        className="fixed inset-0 bg-cover bg-center bg-no-repeat pointer-events-none z-0 transition-opacity duration-700"
-        style={{ 
-          backgroundImage: `url('/jarvis-wallpaper.jpg')`,
-          opacity: wallpaperOpacity,
-        }}
-      />
-      {/* Sci-Fi Atmospheric Vignette & Contrast Control */}
-      <div className="fixed inset-0 bg-slate-950/70 pointer-events-none z-0" />
-      <div className="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(ellipse_at_center,_rgba(6,182,212,0.12)_0%,_rgba(2,6,23,0.85)_75%)]" />
-      <div 
-        className="fixed inset-0 opacity-10 pointer-events-none z-0" 
-        style={{ 
-          backgroundImage: 'linear-gradient(rgba(6, 182, 212, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.1) 1px, transparent 1px)', 
-          backgroundSize: '40px 40px' 
-        }}
+      {/* Universal Looping Ambient Background & Landing Page Video Persona */}
+      <JarvisVisualPersona 
+        mode="background"
+        ambientOpacity={wallpaperOpacity}
+        isSpeaking={isAppSpeaking}
+        isGenerating={isAppGenerating}
       />
 
       <Projector windows={projectorWindows} onClose={closeProjector} />
@@ -433,6 +425,10 @@ function App() {
                 files={files}
                 initialInput={sharedChatInput}
                 clearInitialInput={() => setSharedChatInput('')}
+                onSpeakingChange={(speaking, generating) => {
+                  setIsAppSpeaking(speaking);
+                  setIsAppGenerating(generating);
+                }}
               />
             )}
             {mode === AppMode.FILES && (

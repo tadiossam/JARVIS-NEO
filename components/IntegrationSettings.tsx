@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { IntegrationConfig, KnowledgeSource, SmartDevice, User } from '../types';
 import { getGoogleClientId, setGoogleClientId, signOutGoogle } from '../utils/googleAuth';
 import { executeTieredGeminiRequest, DEFAULT_MODEL_TIERS, getFailoverTelemetry } from '../utils/geminiClient';
+import JarvisVisualPersona, { PersonaMode } from './JarvisVisualPersona';
+import { playAudioData } from '../utils/audio';
 
 interface IntegrationSettingsProps {
   config: IntegrationConfig;
@@ -16,13 +18,56 @@ interface IntegrationSettingsProps {
 
 const IntegrationSettings: React.FC<IntegrationSettingsProps> = ({ config, onSave, onClose, knowledgeSources = [], onUpdateKnowledgeSources, smartDevices = [], onUpdateSmartDevices }) => {
   const [formData, setFormData] = useState<IntegrationConfig>(config);
-  const [activeTab, setActiveTab] = useState<'network' | 'knowledge' | 'smarthome' | 'user' | 'failover'>('failover');
+  const [activeTab, setActiveTab] = useState<'network' | 'knowledge' | 'smarthome' | 'user' | 'failover' | 'persona'>('failover');
   
   // Failover Diagnostic State
   const [isTestingFailover, setIsTestingFailover] = useState(false);
   const [testLogs, setTestLogs] = useState<string[]>([]);
   const [testResponse, setTestResponse] = useState<string | null>(null);
   const [telemetry, setTelemetry] = useState(getFailoverTelemetry());
+
+  // Visual Persona Testing & Customization State
+  const [previewPersonaMode, setPreviewPersonaMode] = useState<PersonaMode>('avatar');
+  const [isPersonaSpeaking, setIsPersonaSpeaking] = useState(false);
+  const [isPersonaGenerating, setIsPersonaGenerating] = useState(false);
+  const [personaVideoUrl, setPersonaVideoUrl] = useState(() => localStorage.getItem('jarvis_video_url') || '/jarvis-video.mp4');
+  const [personaImageUrl, setPersonaImageUrl] = useState(() => localStorage.getItem('jarvis_image_url') || '/jarvis-wallpaper.jpg');
+  const [personaVoiceText, setPersonaVoiceText] = useState("Greetings, Commander. All systems are operational. Visual persona neural link established.");
+  const [isVoiceTesting, setIsVoiceTesting] = useState(false);
+
+  const testPersonaVoice = async () => {
+    if (isVoiceTesting || isPersonaSpeaking) return;
+    setIsVoiceTesting(true);
+    setIsPersonaSpeaking(true);
+    try {
+      // Attempt TTS failover synthesis or fallback speech
+      const res = await executeTieredGeminiRequest({
+        contents: [{ parts: [{ text: personaVoiceText }] }],
+        config: {
+          responseModalities: ["AUDIO" as any],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: "Puck" }
+            }
+          }
+        }
+      });
+      const candidate = res.candidates?.[0];
+      const part = candidate?.content?.parts?.[0];
+      if (part?.inlineData?.data) {
+        await playAudioData(part.inlineData.data);
+      } else {
+        // Fallback simulate speaking timer if audio cannot play
+        await new Promise(r => setTimeout(r, 3200));
+      }
+    } catch (err) {
+      console.warn("TTS test fallback:", err);
+      await new Promise(r => setTimeout(r, 2800));
+    } finally {
+      setIsPersonaSpeaking(false);
+      setIsVoiceTesting(false);
+    }
+  };
 
   const runFailoverProbe = async () => {
     setIsTestingFailover(true);
@@ -148,6 +193,7 @@ const IntegrationSettings: React.FC<IntegrationSettingsProps> = ({ config, onSav
 
       <div className="flex gap-2 mb-6 z-10 overflow-x-auto">
         {[
+          { id: 'persona', label: 'Visual Persona' },
           { id: 'failover', label: 'Tiered Failover' },
           { id: 'knowledge', label: 'Knowledge' },
           { id: 'smarthome', label: 'Smart Home' },
@@ -579,6 +625,255 @@ const IntegrationSettings: React.FC<IntegrationSettingsProps> = ({ config, onSav
                 </div>
               </div>
             </div>
+        )}
+
+        {/* VISUAL PERSONA STUDIO TAB */}
+        {activeTab === 'persona' && (
+          <div className="space-y-6">
+            {/* Header & Purpose Banner */}
+            <div className="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-cyan-200 tracking-wider flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    DYNAMIC VISUAL PERSONA STUDIO
+                  </h3>
+                  <p className="text-xs text-cyan-600 mt-1">
+                    Multi-state video component: Ambient looping background, Idle Virtual Avatar, and Active Vocalizing Hologram.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono px-2 py-1 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-400">
+                    HTML5 &lt;video&gt; Engine
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Interactive Sandbox Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Sandbox Stage */}
+              <div className="lg:col-span-7 bg-slate-950/80 border border-cyan-900/60 rounded-xl p-4 flex flex-col items-center justify-center min-h-[360px] relative overflow-hidden">
+                <div className="absolute top-3 left-3 text-[10px] font-mono text-cyan-500/80 flex items-center gap-2 z-20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                  STAGE: {previewPersonaMode.toUpperCase()} // STATUS: {isPersonaSpeaking ? 'SPEAKING' : isPersonaGenerating ? 'REASONING' : 'IDLE'}
+                </div>
+
+                <div className="w-full h-full flex items-center justify-center py-6">
+                  {previewPersonaMode === 'background' ? (
+                    <div className="w-full h-64 relative rounded-lg overflow-hidden border border-cyan-500/30">
+                      <JarvisVisualPersona 
+                        mode="background" 
+                        isSpeaking={isPersonaSpeaking} 
+                        isGenerating={isPersonaGenerating}
+                        videoUrl={personaVideoUrl}
+                        imageUrl={personaImageUrl}
+                        ambientOpacity={0.65}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                        <span className="px-3 py-1 bg-slate-950/80 border border-cyan-400/60 rounded text-xs font-mono text-cyan-300">
+                          Ambient Background Layer Preview
+                        </span>
+                      </div>
+                    </div>
+                  ) : previewPersonaMode === 'docked' ? (
+                    <div className="p-6 bg-slate-900/90 rounded-xl border border-cyan-800/60 flex items-center gap-4">
+                      <span className="text-xs font-mono text-cyan-500">Header Dock:</span>
+                      <JarvisVisualPersona 
+                        mode="docked" 
+                        isSpeaking={isPersonaSpeaking} 
+                        isGenerating={isPersonaGenerating}
+                        videoUrl={personaVideoUrl}
+                        imageUrl={personaImageUrl}
+                      />
+                    </div>
+                  ) : (
+                    <JarvisVisualPersona 
+                      mode="avatar" 
+                      size="lg"
+                      isSpeaking={isPersonaSpeaking} 
+                      isGenerating={isPersonaGenerating}
+                      videoUrl={personaVideoUrl}
+                      imageUrl={personaImageUrl}
+                      statusText={isPersonaSpeaking ? "VOCAL LINK ENGAGED" : isPersonaGenerating ? "NEURAL REASONING" : "STANDBY IDLE"}
+                    />
+                  )}
+                </div>
+
+                <div className="w-full mt-auto pt-3 border-t border-cyan-900/40 flex items-center justify-between text-[10px] font-mono text-cyan-600">
+                  <span>autoPlay • loop • muted • playsInline</span>
+                  <span>poster: {personaImageUrl.split('/').pop()}</span>
+                </div>
+              </div>
+
+              {/* Right Controls & Interactive Triggers */}
+              <div className="lg:col-span-5 space-y-4">
+                {/* Mode Selector */}
+                <div className="p-4 bg-slate-900/60 border border-cyan-900/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-cyan-300 font-mono">1. SELECT OPERATIONAL MODE</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'background', label: 'Ambient Bg' },
+                      { id: 'avatar', label: 'Idle Avatar' },
+                      { id: 'docked', label: 'Docked Bar' },
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setPreviewPersonaMode(m.id as any)}
+                        className={`py-2 px-1 text-center rounded text-xs font-mono transition-all border ${
+                          previewPersonaMode === m.id
+                            ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400 font-bold shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                            : 'bg-slate-950/40 text-cyan-600 border-cyan-950 hover:border-cyan-800 hover:text-cyan-400'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* State Trigger Controls */}
+                <div className="p-4 bg-slate-900/60 border border-cyan-900/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-cyan-300 font-mono">2. STATE SIMULATION & VOICE API</div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonaSpeaking(prev => !prev)}
+                      className={`py-2 px-3 rounded text-xs font-mono border transition-all flex items-center justify-center gap-2 ${
+                        isPersonaSpeaking
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                          : 'bg-slate-950/50 text-cyan-400 border-cyan-900 hover:border-cyan-500'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isPersonaSpeaking ? 'bg-slate-950 animate-ping' : 'bg-cyan-600'}`} />
+                      {isPersonaSpeaking ? 'Speaking ON' : 'Toggle Speaking'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonaGenerating(prev => !prev)}
+                      className={`py-2 px-3 rounded text-xs font-mono border transition-all flex items-center justify-center gap-2 ${
+                        isPersonaGenerating
+                          ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold shadow-[0_0_15px_rgba(245,158,11,0.4)]'
+                          : 'bg-slate-950/50 text-amber-400 border-amber-900/50 hover:border-amber-500'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isPersonaGenerating ? 'bg-slate-950 animate-ping' : 'bg-amber-600'}`} />
+                      {isPersonaGenerating ? 'Reasoning ON' : 'Toggle Thinking'}
+                    </button>
+                  </div>
+
+                  {/* Physical Voice API Speech Test */}
+                  <div className="pt-2 border-t border-cyan-900/40">
+                    <label className="text-[11px] text-cyan-500 font-mono block mb-1">
+                      Audio Voice API Test String:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={personaVoiceText}
+                        onChange={(e) => setPersonaVoiceText(e.target.value)}
+                        className="flex-1 bg-slate-950/90 border border-cyan-900/60 rounded px-2.5 py-1.5 text-xs text-cyan-200 font-mono focus:border-cyan-400 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={testPersonaVoice}
+                        disabled={isVoiceTesting}
+                        className="px-3 py-1.5 bg-emerald-950/50 border border-emerald-500/60 text-emerald-300 hover:bg-emerald-500 hover:text-slate-950 disabled:opacity-50 text-xs font-mono font-bold rounded flex items-center gap-1.5 transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                        <span>{isVoiceTesting ? 'SPEAKING...' : 'TEST TTS'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Video & Poster Source Configuration */}
+                <div className="p-4 bg-slate-900/60 border border-cyan-900/50 rounded-xl space-y-3">
+                  <div className="text-xs font-bold text-cyan-300 font-mono">3. ASSET PATHS & FALLBACKS</div>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] text-cyan-600 font-mono uppercase block mb-1">
+                        Video Source (.mp4 / stream):
+                      </label>
+                      <input 
+                        type="text"
+                        value={personaVideoUrl}
+                        onChange={(e) => setPersonaVideoUrl(e.target.value)}
+                        className="w-full bg-slate-950/90 border border-cyan-900/60 rounded px-2.5 py-1 text-xs text-cyan-200 font-mono focus:border-cyan-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-cyan-600 font-mono uppercase block mb-1">
+                        Poster Fallback Image (poster attribute):
+                      </label>
+                      <input 
+                        type="text"
+                        value={personaImageUrl}
+                        onChange={(e) => setPersonaImageUrl(e.target.value)}
+                        className="w-full bg-slate-950/90 border border-cyan-900/60 rounded px-2.5 py-1 text-xs text-cyan-200 font-mono focus:border-cyan-400 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem('jarvis_video_url', personaVideoUrl);
+                          localStorage.setItem('jarvis_image_url', personaImageUrl);
+                          window.dispatchEvent(new Event('storage'));
+                          alert("Persona assets saved to local storage!");
+                        }}
+                        className="flex-1 py-1.5 bg-cyan-950/60 border border-cyan-700/60 text-cyan-300 text-xs font-mono rounded hover:bg-cyan-500 hover:text-slate-950 transition-all font-bold"
+                      >
+                        SAVE ASSETS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPersonaVideoUrl('/jarvis-video.mp4');
+                          setPersonaImageUrl('/jarvis-wallpaper.jpg');
+                          localStorage.removeItem('jarvis_video_url');
+                          localStorage.removeItem('jarvis_image_url');
+                          window.dispatchEvent(new Event('storage'));
+                        }}
+                        className="px-3 py-1.5 bg-slate-950 border border-cyan-950 text-cyan-600 text-xs font-mono rounded hover:text-cyan-400"
+                      >
+                        RESET DEFAULTS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Architecture & Integration Specs */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-cyan-900/40 text-xs font-mono space-y-2 text-cyan-500">
+              <div className="text-cyan-300 font-bold tracking-wider uppercase flex items-center gap-2">
+                <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                PERSONA ENGINE ARCHITECTURE SPECIFICATION
+              </div>
+              <ul className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-[11px]">
+                <li className="p-2.5 rounded bg-slate-900/50 border border-cyan-950">
+                  <span className="text-cyan-300 font-bold block mb-0.5">1. Ambient Background:</span>
+                  Looping full-bleed video layer with subtle animated scanlines, ambient vignette, and audio-reactive scaling.
+                </li>
+                <li className="p-2.5 rounded bg-slate-900/50 border border-cyan-950">
+                  <span className="text-cyan-300 font-bold block mb-0.5">2. Idle Personality:</span>
+                  Concentric rotating telemetry rings, status telemetry HUD, and seamless static poster fallback.
+                </li>
+                <li className="p-2.5 rounded bg-slate-900/50 border border-cyan-950">
+                  <span className="text-cyan-300 font-bold block mb-0.5">3. Vocalizing State:</span>
+                  Triggered dynamically by audio playback or reasoning tokens, illuminating soundwave rings and holographic lens flares.
+                </li>
+              </ul>
+            </div>
+          </div>
         )}
       </div>
     </div>

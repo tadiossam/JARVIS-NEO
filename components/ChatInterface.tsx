@@ -5,6 +5,7 @@ import { ChatMessage, MessageRole, ProjectorType, IntegrationConfig, WorkspaceAc
 import { playAudioData } from '../utils/audio';
 import { executeTieredGeminiRequest, DEFAULT_MODEL_TIERS, TTS_MODEL_TIERS, getFailoverTelemetry } from '../utils/geminiClient';
 import Hologram from './Hologram';
+import JarvisVisualPersona from './JarvisVisualPersona';
 
 interface ChatInterfaceProps {
   onLog: (msg: string) => void;
@@ -19,6 +20,7 @@ interface ChatInterfaceProps {
   files?: ProjectFile[];
   initialInput?: string;
   clearInitialInput?: () => void;
+  onSpeakingChange?: (speaking: boolean, generating: boolean) => void;
 }
 
 // --- HELPER FUNCTIONS ---
@@ -79,11 +81,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   fileSystemActions,
   files = [],
   initialInput,
-  clearInitialInput
+  clearInitialInput,
+  onSpeakingChange
 }) => {
   const [input, setInput] = useState(initialInput || '');
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showSpotlightPersona, setShowSpotlightPersona] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [autoVoice, setAutoVoice] = useState(false);
@@ -93,6 +97,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize persona speaking and generating state up to parent
+  useEffect(() => {
+    onSpeakingChange?.(isSpeaking, isLoading);
+  }, [isSpeaking, isLoading, onSpeakingChange]);
 
   useEffect(() => {
       if (initialInput) {
@@ -307,42 +316,101 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         )}
 
-        {/* Model Tier & Failover Safeguard Status Bar */}
-        <div className="px-4 py-1.5 bg-slate-900/80 border-b border-cyan-900/40 flex items-center justify-between text-[11px] font-mono shrink-0">
-          <div className="flex items-center gap-2 text-cyan-400">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-            </span>
-            <span className="text-cyan-300 font-bold">PRIMARY TIER:</span>
-            <span className="text-cyan-200 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/50">
-              gemini-3.1-pro-preview
-            </span>
-          </div>
+        {/* Model Tier & Failover Safeguard Status Bar with Docked Persona */}
+        <div className="px-4 py-1.5 bg-slate-900/90 border-b border-cyan-900/40 flex items-center justify-between text-[11px] font-mono shrink-0 gap-2 flex-wrap">
           <div className="flex items-center gap-3">
+            {/* Docked Jarvis Persona */}
+            <JarvisVisualPersona 
+              mode="docked" 
+              isSpeaking={isSpeaking} 
+              isGenerating={isLoading} 
+              onModeChange={() => setShowSpotlightPersona(prev => !prev)} 
+            />
+
+            <div className="h-4 w-px bg-cyan-900/50 hidden md:block" />
+
+            <div className="flex items-center gap-2 text-cyan-400">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+              </span>
+              <span className="text-cyan-300 font-bold hidden sm:inline">PRIMARY:</span>
+              <span className="text-cyan-200 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/50">
+                gemini-3.1-pro-preview
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowSpotlightPersona(prev => !prev)}
+              className={`px-2 py-0.5 rounded text-[10px] border font-mono transition-all flex items-center gap-1 ${
+                showSpotlightPersona 
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold' 
+                  : 'bg-slate-950/60 text-cyan-500 border-cyan-900 hover:border-cyan-400 hover:text-cyan-300'
+              }`}
+              title="Toggle Holographic Persona Portal"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span>{showSpotlightPersona ? 'CLOSE PORTAL' : 'HOLO PORTAL'}</span>
+            </button>
+
             <div className="hidden sm:flex items-center gap-1.5 text-cyan-500">
               <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
               <span>SAFEGUARD:</span>
-              <span className="text-emerald-400 font-bold">gemini-1.5-flash armed</span>
+              <span className="text-emerald-400 font-bold">1.5-flash armed</span>
             </div>
-            <span className="text-[10px] text-cyan-600 border-l border-cyan-900/50 pl-2">
-              5 TIERS ACTIVE
+            <span className="text-[10px] text-cyan-600 border-l border-cyan-900/50 pl-2 hidden sm:inline">
+              5 TIERS
             </span>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-cyan-900/50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-cyan-900/50 relative">
+            {/* Interactive Floating Persona Portal in Chat (when toggled) */}
+            {showSpotlightPersona && messages.length > 0 && (
+              <div className="sticky top-2 z-40 float-right ml-4 mb-4 p-3 bg-slate-950/90 border border-cyan-500/50 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.3)] backdrop-blur-md flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-full flex items-center justify-between mb-2 text-[10px] font-mono border-b border-cyan-900/60 pb-1">
+                  <span className="text-cyan-400 font-bold flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                    HOLO VIRTUAL PERSONA
+                  </span>
+                  <button 
+                    onClick={() => setShowSpotlightPersona(false)}
+                    className="text-cyan-600 hover:text-cyan-300"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <JarvisVisualPersona 
+                  mode="avatar" 
+                  size="sm" 
+                  isSpeaking={isSpeaking} 
+                  isGenerating={isLoading} 
+                  statusText={isSpeaking ? "SPEAKING" : isLoading ? "REASONING" : "IDLE"}
+                />
+              </div>
+            )}
+
             {messages.length === 0 && !selectedFile && (
                 <div className="flex flex-col items-center justify-center h-full gap-6">
                     <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                         <div className="absolute inset-0 bg-cyan-500/5 blur-3xl group-hover:bg-cyan-500/20 transition-all rounded-full"></div>
-                        <Hologram size="lg" />
+                        <JarvisVisualPersona 
+                          size="lg" 
+                          mode="avatar" 
+                          isSpeaking={isSpeaking} 
+                          isGenerating={isLoading} 
+                          statusText={isSpeaking ? "SPEAKING // VOCAL ACTIVE" : isLoading ? "REASONING // PIPELINE" : "IDLE // READY"} 
+                        />
                         
                         {/* Empty State Upload Area */}
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 border-2 border-dashed border-cyan-500/20 rounded-full animate-[spin_30s_linear_infinite] pointer-events-none group-hover:border-cyan-500/50"></div>
-                        <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-64 text-center">
+                        <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 w-64 text-center">
                             <p className="text-cyan-500 font-mono text-xs tracking-widest uppercase font-bold group-hover:text-cyan-300 transition-colors">Neural Uplink Port</p>
                             <p className="text-[10px] text-cyan-800 mt-1 uppercase">Drop images or data files here for analysis</p>
                         </div>
