@@ -32,7 +32,7 @@ const ProjectorWindow: React.FC<{ data: ProjectorData, onClose: () => void, zInd
            const timer = setInterval(() => setCurrentTime(new Date()), 1000);
            return () => clearInterval(timer);
         }
-    }, [data]);
+    }, [data.type]);
 
     // Simulated Scanning Effect for LiDAR
     useEffect(() => {

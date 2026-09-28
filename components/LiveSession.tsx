@@ -892,15 +892,25 @@ const LiveSession: React.FC<LiveSessionProps> = ({
     }
   }, [onLog, onStatusUpdate, onError, openProjector, integrationConfig, systemStats, workspaceActions, smartHomeActions, setLockState, knowledgeSources, fileSystemActions]);
 
+  const initializeSessionRef = useRef(initializeSession);
+  useEffect(() => {
+    initializeSessionRef.current = initializeSession;
+  });
+
+  const startWakeWordListenerRef = useRef(startWakeWordListener);
+  useEffect(() => {
+    startWakeWordListenerRef.current = startWakeWordListener;
+  });
+
   // Handle State Transitions
   useEffect(() => {
      if (sessionState === 'CONNECTING') {
-        initializeSession();
+        initializeSessionRef.current();
      } else if (sessionState === 'STANDBY') {
-        startWakeWordListener();
+        startWakeWordListenerRef.current();
         setupLocalVisualizer();
      }
-  }, [sessionState, initializeSession, startWakeWordListener]);
+  }, [sessionState]);
 
   // Clean up on unmount
   useEffect(() => {

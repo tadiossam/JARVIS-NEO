@@ -46,14 +46,9 @@ export const JarvisVisualPersona: React.FC<JarvisVisualPersonaProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
-  const [internalMode, setInternalMode] = useState<PersonaMode>(mode);
+  const [overriddenMode, setOverriddenMode] = useState<PersonaMode | null>(null);
 
-  // Sync external mode prop
-  useEffect(() => {
-    setInternalMode(mode);
-  }, [mode]);
-
-  const activeMode = internalMode;
+  const activeMode = overriddenMode ?? mode;
   const isActive = isSpeaking || isGenerating;
 
   // Dynamically control video playback speed & responsiveness during speaking state
@@ -291,7 +286,7 @@ export const JarvisVisualPersona: React.FC<JarvisVisualPersonaProps> = ({
             <button
               key={m}
               onClick={() => {
-                setInternalMode(m);
+                setOverriddenMode(m);
                 onModeChange?.(m);
               }}
               className={`px-2 py-1 rounded uppercase tracking-wider transition-all ${

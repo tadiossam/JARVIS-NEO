@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import LiveSession from './components/LiveSession';
 import ChatInterface from './components/ChatInterface';
 import SystemStatus from './components/SystemStatus';
@@ -95,13 +95,13 @@ function App() {
   const filesRef = useRef(files);
   useEffect(() => { filesRef.current = files; }, [files]);
 
-  const saveFilesToStorage = (newFiles: ProjectFile[]) => {
+  const saveFilesToStorage = useCallback((newFiles: ProjectFile[]) => {
       setFiles(newFiles);
       filesRef.current = newFiles;
       localStorage.setItem('jarvis_files', JSON.stringify(newFiles));
-  };
+  }, []);
 
-  const fileSystemActions: FileSystemActions = {
+  const fileSystemActions = useMemo<FileSystemActions>(() => ({
       createFile: async (name, content, type, tags = []) => {
           const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
           const newFile: ProjectFile = { id, name, content, type, timestamp: new Date().toISOString(), tags };
@@ -112,7 +112,7 @@ function App() {
       listFiles: async (tag) => tag ? filesRef.current.filter(f => f.tags.includes(tag)) : filesRef.current,
       deleteFile: (id) => saveFilesToStorage(filesRef.current.filter(f => f.id !== id)),
       updateFile: (id, content) => saveFilesToStorage(filesRef.current.map(f => f.id === id ? { ...f, content } : f))
-  };
+  }), [saveFilesToStorage]);
 
   const [smartDevices, setSmartDevices] = useState<SmartDevice[]>(() => {
       try {
@@ -125,15 +125,19 @@ function App() {
       }
   });
 
-  const saveDevices = (devices: SmartDevice[]) => {
-      setSmartDevices(devices);
-      localStorage.setItem('jarvis_smart_devices', JSON.stringify(devices));
-  };
+  const smartDevicesRef = useRef(smartDevices);
+  useEffect(() => { smartDevicesRef.current = smartDevices; }, [smartDevices]);
 
-  const addLog = (msg: string) => {
+  const saveDevices = useCallback((devices: SmartDevice[]) => {
+      setSmartDevices(devices);
+      smartDevicesRef.current = devices;
+      localStorage.setItem('jarvis_smart_devices', JSON.stringify(devices));
+  }, []);
+
+  const addLog = useCallback((msg: string) => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
     setLogs(prev => [`[${time}] ${msg}`, ...prev].slice(0, 50));
-  };
+  }, []);
 
   useEffect(() => {
     const connection = (navigator as any).connection;
@@ -155,23 +159,26 @@ function App() {
     if (connection) {
         connection.addEventListener('change', updateNetworkStats);
         updateNetworkStats();
+        return () => {
+          connection.removeEventListener('change', updateNetworkStats);
+        };
     }
   }, []);
 
-  const smartHomeActions: SmartHomeActions = {
+  const smartHomeActions = useMemo<SmartHomeActions>(() => ({
     setDeviceState: async (id, state, value) => {
-       const device = smartDevices.find(d => d.id === id);
+       const device = smartDevicesRef.current.find(d => d.id === id);
        if (!device) return "Device not found";
        addLog(`Commanding ${device.name}: ${state} ${value || ''}`);
-       const updated = smartDevices.map(d => d.id === id ? { ...d, status: state as any, value: value !== undefined ? value : d.value } : d);
+       const updated = smartDevicesRef.current.map(d => d.id === id ? { ...d, status: state as any, value: value !== undefined ? value : d.value } : d);
        saveDevices(updated);
        return "OK";
     },
-    getDevices: () => smartDevices,
+    getDevices: () => smartDevicesRef.current,
     getCameraStream: (id) => "https://images.unsplash.com/photo-1558002038-10914cba6023?q=80&w=1000",
-    addDevice: (device) => saveDevices([...smartDevices, device]),
-    removeDevice: (id) => saveDevices(smartDevices.filter(d => d.id !== id))
-  };
+    addDevice: (device) => saveDevices([...smartDevicesRef.current, device]),
+    removeDevice: (id) => saveDevices(smartDevicesRef.current.filter(d => d.id !== id))
+  }), [addLog, saveDevices]);
 
   const [emails, setEmails] = useState<Email[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -211,16 +218,25 @@ function App() {
     addLog('User session terminated. Logged out.');
   };
 
-  const workspaceActions: WorkspaceActions = {
+  const workspaceActions = useMemo<WorkspaceActions>(() => ({
     sendEmail: async (to, subject, body) => ({ status: 'sent', id: '1' }),
     checkEmails: async (query) => emails,
     scheduleEvent: async (title, time, attendees) => ({ status: 'scheduled', event: {} as any }),
     checkCalendar: async (date) => calendarEvents
-  };
+  }), [emails, calendarEvents]);
 
   const [chatHistory, setChatHistory] = useState<any[]>([]);
   const [isAppSpeaking, setIsAppSpeaking] = useState(false);
   const [isAppGenerating, setIsAppGenerating] = useState(false);
+
+  const handleSpeakingChange = useCallback((speaking: boolean, generating: boolean) => {
+    setIsAppSpeaking(prev => (prev !== speaking ? speaking : prev));
+    setIsAppGenerating(prev => (prev !== generating ? generating : prev));
+  }, []);
+
+  const handleClearInitialInput = useCallback(() => {
+    setSharedChatInput('');
+  }, []);
   const [systemStats, setSystemStats] = useState<SystemStat[]>([
     { label: 'CORES', value: navigator.hardwareConcurrency || 4, unit: 'THR', status: 'normal' },
     { label: 'BATTERY', value: '--', unit: '%', status: 'normal' },
@@ -424,11 +440,8 @@ function App() {
                 fileSystemActions={fileSystemActions} 
                 files={files}
                 initialInput={sharedChatInput}
-                clearInitialInput={() => setSharedChatInput('')}
-                onSpeakingChange={(speaking, generating) => {
-                  setIsAppSpeaking(speaking);
-                  setIsAppGenerating(generating);
-                }}
+                clearInitialInput={handleClearInitialInput}
+                onSpeakingChange={handleSpeakingChange}
               />
             )}
             {mode === AppMode.FILES && (

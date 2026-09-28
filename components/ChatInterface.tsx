@@ -98,17 +98,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Synchronize persona speaking and generating state up to parent
+  // Synchronize persona speaking and generating state up to parent via stable ref
+  const onSpeakingChangeRef = useRef(onSpeakingChange);
   useEffect(() => {
-    onSpeakingChange?.(isSpeaking, isLoading);
-  }, [isSpeaking, isLoading, onSpeakingChange]);
+    onSpeakingChangeRef.current = onSpeakingChange;
+  });
+
+  const prevSpeakingRef = useRef<boolean>(false);
+  const prevLoadingRef = useRef<boolean>(false);
 
   useEffect(() => {
-      if (initialInput) {
-          setInput(initialInput);
-          if (clearInitialInput) clearInitialInput();
-      }
-  }, [initialInput, clearInitialInput]);
+    if (prevSpeakingRef.current !== isSpeaking || prevLoadingRef.current !== isLoading) {
+      prevSpeakingRef.current = isSpeaking;
+      prevLoadingRef.current = isLoading;
+      onSpeakingChangeRef.current?.(isSpeaking, isLoading);
+    }
+  }, [isSpeaking, isLoading]);
+
+  const clearInitialInputRef = useRef(clearInitialInput);
+  useEffect(() => {
+    clearInitialInputRef.current = clearInitialInput;
+  });
+
+  useEffect(() => {
+    if (initialInput) {
+      setInput(initialInput);
+      clearInitialInputRef.current?.();
+    }
+  }, [initialInput]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { ProjectFile, FileSystemActions } from '../types';
 
@@ -15,6 +13,7 @@ const FileManager: React.FC<FileManagerProps> = ({ files, actions, onClose, acti
   const [filter, setFilter] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const [showSaving, setShowSaving] = useState(false);
 
   // Effect to handle external file selection (e.g. from Global Search)
   useEffect(() => {
@@ -37,6 +36,8 @@ const FileManager: React.FC<FileManagerProps> = ({ files, actions, onClose, acti
         actions.updateFile(selectedFile.id, editContent);
         setSelectedFile({ ...selectedFile, content: editContent });
         setIsEditing(false);
+        setShowSaving(true);
+        setTimeout(() => setShowSaving(false), 2000);
     }
   };
 
@@ -120,6 +121,7 @@ const FileManager: React.FC<FileManagerProps> = ({ files, actions, onClose, acti
                        <div className="flex items-center gap-2">
                            <span className="text-cyan-500 font-bold">{selectedFile.name}</span>
                            {selectedFile.language && <span className={`text-[10px] ${getLanguageColor(selectedFile.language)} opacity-70`}>.{selectedFile.language.toUpperCase()}</span>}
+                           {showSaving && <span className="text-[10px] text-cyan-700 animate-pulse">Auto-saving...</span>}
                        </div>
                        <div className="flex gap-2">
                            {isEditing ? (
